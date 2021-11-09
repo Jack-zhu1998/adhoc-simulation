@@ -13,9 +13,8 @@
 #include <boost/asio.hpp>
 #include <unordered_map>
 #include <deque>
-#define  MAX  5
-
-#include <time.h>
+#include <ctime>
+#define  MAX  10
 
 #include "message.h"
 
@@ -56,7 +55,7 @@ public:
         {
             for(int low = 0; low < MAX;low++)
             {
-                matrux[column][low]=0;
+                matrix[column][low]=0;
             }
         }
 
@@ -67,8 +66,8 @@ public:
             {
                 if(rand() % MAX > int(MAX/2) && column!=low)
                 {
-                    matrux[column][low] = 1;
-                    matrux[low][column] = 1;
+                    matrix[column][low] = 1;
+                    matrix[low][column] = 1;
                 }
             }
         }
@@ -80,7 +79,7 @@ public:
         {
             for (int j = 0; j < MAX; j++)
             {
-                cout << matrux[i][j] << " ";
+                cout << matrix[i][j] << " ";
 
             }
             cout << endl;
@@ -89,6 +88,7 @@ public:
     void leave(int id) {
         session_map.erase(id);
     }
+
     bool judge_deliver(const ad_hoc_message &msg)   //判断是否转发消息
     {
         for(int k = 0;k<MAX;k++)
@@ -101,15 +101,17 @@ public:
                     if(node[j] == msg.sendid())      //msg.sendid()是要发送方的ID号
                     {
                         int column = j;
-                        if(matrux[column][row] == 1)
+                        if(matrix[column][row] == 1)
                         {
                             return true;
                         }
+
                     }
                 }
 
             }
         }
+        return 0;
     }
     /**
         * scope转发消息函数
@@ -128,15 +130,22 @@ public:
             if(judge_deliver(msg))       //根据网络拓扑图判断是否能转发信息
             {
                 session_map[msg.receiveid()]->deliver(msg);    //调用ID号对应的session去发送信息
+                cout<<"Send Success!"<<endl;
                 return true;
+            }
+            else
+            {
+                cout<<"Send Fail!"<<endl;
             }
 
         }
+        return 0;
     }
+
 private:
     unordered_map<int, ad_hoc_participant_ptr> session_map;
     int node[MAX];
-    int matrux[MAX][MAX];
+    int matrix[MAX][MAX];
 };
 
 
