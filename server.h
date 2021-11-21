@@ -14,7 +14,10 @@
 #include <unordered_map>
 #include <deque>
 #include <ctime>
-#define  MAX  10
+#include <boost/timer/timer.hpp>
+
+#define  MAX  8
+
 
 #include "message.h"
 
@@ -23,6 +26,7 @@ using boost::asio::ip::tcp;
 using namespace std;
 //使用deque来实现串型消息队列，主要用于待发送消息队列
 typedef deque<ad_hoc_message> message_queue;
+
 
 
 class ad_hoc_participant {
@@ -39,6 +43,10 @@ typedef boost::shared_ptr<ad_hoc_participant> ad_hoc_participant_ptr;
 //负责管理多个连接的ad_hoc_session，维护一个ID和session映射关系的哈希表
 class ad_hoc_scope {
 public:
+    ad_hoc_scope(boost::asio::io_context &io_context):timer(io_context,boost::posix_time::seconds(60)){
+        timer.async_wait(boost::bind(&ad_hoc_scope::update_UDG,this,boost::asio::placeholders::error()));
+    }
+
     void join(int id, ad_hoc_participant_ptr participant) {
         session_map[id] = participant;
 
@@ -64,7 +72,7 @@ public:
         {
             for(int low = 0; low < MAX;low++)
             {
-                if(rand() % MAX > int(MAX/2) && column!=low)
+                if(rand() % MAX > (MAX * 1.0 / 1.3f) || column == low)
                 {
                     matrix[column][low] = 1;
                     matrix[low][column] = 1;
@@ -72,6 +80,7 @@ public:
             }
         }
     }
+
     void print_UDG()   //打印图
     {
         cout<<"The node network topology is as follows: "<<endl;
@@ -85,6 +94,11 @@ public:
             cout << endl;
         }
     }
+    void setup() {
+        Create_MatrixUDG();
+        print_UDG();
+    }
+
     void leave(int id) {
         session_map.erase(id);
     }
@@ -142,12 +156,19 @@ public:
         return 0;
     }
 
+    void update_UDG(const boost::system::error_code &error_code)
+    {
+        setup();
+        timer.expires_at(timer.expires_at() + boost::posix_time::seconds(60));
+        timer.async_wait(boost::bind(&ad_hoc_scope::update_UDG,this,boost::asio::placeholders::error));
+    }
+
 private:
     unordered_map<int, ad_hoc_participant_ptr> session_map;
     int node[MAX];
     int matrix[MAX][MAX];
+    boost::asio::deadline_timer timer;
 };
-
 
 //对于server端的socket连接，每个对象对应一个socket连接
 
@@ -313,11 +334,11 @@ public:
      * @param endpoint server要监听的端口
      * @param io_context 负责server收发消息的IO事件循环。当异步函数绑定好回调函数之后，需要运行io_context.run()来启动事件循环。
      */
+
     ad_hoc_server(const tcp::endpoint &endpoint, boost::asio::io_context &io_context) : acceptor(io_context, endpoint),
-                                                                                        io_context(io_context) {
+                                                                                        io_context(io_context) ,scope(io_context){
         cout << "start listening at port " << endpoint.port() << endl;
-        scope.Create_MatrixUDG();
-        scope.print_UDG();
+        scope.setup();
         //创建一个空的session对象
         ad_hoc_session_ptr new_session(new ad_hoc_session(io_context, scope));
         //服务器异步监听端口，直到有新连接到来
@@ -332,6 +353,7 @@ public:
                                       boost::asio::placeholders::error
                               ));
     }
+
 
 private://接受client端主动发起的连接
     /**
